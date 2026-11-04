@@ -180,7 +180,7 @@
 <div class="ov" id="savingOv" hidden>
   <div class="box center">
     <div class="loader"><svg class="truck"><use href="#truck"/></svg></div>
-    <b>Saving payment…</b><small>Uploading receipt to Google Drive</small>
+    <b>Saving payment…</b><small id="savingSub">Uploading receipt to Google Drive</small>
   </div>
 </div>
 
@@ -242,6 +242,6 @@
 <script>
   if (!String((window.CPA_CONFIG || {}).APPS_SCRIPT_URL || '').trim()) document.write('<script src="mock-api.js?v=4"><\/script>');
 </script>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

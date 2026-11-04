@@ -91,7 +91,8 @@
       const keepalive = !!(opts && opts.keepalive);
       let text = null, lastErr = null;
       for (let i = 0; i < (retry ? 2 : 1) && text == null; i++) {
-        try { text = await postText(body, retry ? 30000 : 180000, keepalive); } catch (e) { lastErr = e; }
+        const ms = (opts && opts.timeout) || (retry ? 30000 : 180000);
+        try { text = await postText(body, ms, keepalive); } catch (e) { lastErr = e; }
       }
       if (text == null) {
         throw new Error(lastErr && lastErr.name === 'AbortError'
@@ -666,12 +667,30 @@
         }
       }
       renderPhoto();
+      startStage(S.photo);
     } catch (e) {
       clearPhoto();
       toast(e.message || 'Could not read this file — try another photo', true);
     } finally {
       S.photoBusy = false;
     }
+  }
+
+  /**
+   * Fast submit: the receipt goes up to Google Drive in the background as soon as it is chosen,
+   * while the rest of the form is being filled. Submit then sends only the text (a few hundred bytes).
+   * photo.stage → the uploaded file's id, or null if that did not work (then Submit sends the photo itself).
+   */
+  function startStage(photo) {
+    if (DEMO || !photo) return;
+    const replace = S.oldStage || ''; // the photo chosen before this one (never submitted) is thrown away
+    S.oldStage = '';
+    photo.stage = api('stage', {
+      file: { name: photo.name, type: photo.type, data: photo.data },
+      replace: replace
+    }, { timeout: 90000 })
+      .then(r => (photo.stageId = r.stageId || null))
+      .catch(() => null);
   }
 
   function renderPhoto() {
@@ -694,6 +713,7 @@
 
   function clearPhoto() {
     if (S.photo && S.photo.url) URL.revokeObjectURL(S.photo.url);
+    if (S.photo && S.photo.stageId && !S.photo.used) S.oldStage = S.photo.stageId;
     S.photo = null;
     renderPhoto();
   }
@@ -787,10 +807,12 @@
 
   form.addEventListener('submit', e => { e.preventDefault(); submit(); });
 
-  function showSaving(on) {
+  function showSaving(on, sub) {
     const ov = $('#savingOv');
+    if (sub) $('#savingSub').textContent = sub;
     if (on) { ov.hidden = false; fadeIn(ov); } else fadeOut(ov);
   }
+  const UPLOADING = 'Uploading receipt to Google Drive';
 
   async function submit() {
     if (S.busy) return;
@@ -800,14 +822,29 @@
     S.clientId = S.clientId || uid(); // same id on "Try again", so the server never saves it twice
     S.busy = true;
     $('#submitBtn').disabled = true;
-    showSaving(true);
+    const photo = S.photo;
+    showSaving(true, photo.stageId ? 'Receipt already uploaded ✓ — saving entry' : UPLOADING);
     try {
-      const r = await api('submit', {
+      // the photo is normally already in Drive by now (uploaded while the form was filled)
+      const stageId = photo.stage ? await photo.stage : null;
+      if (stageId) $('#savingSub').textContent = 'Receipt already uploaded ✓ — saving entry';
+      const send = sid => api('submit', Object.assign({
         clientId: S.clientId,
         data: v,
-        file: { name: S.photo.name, type: S.photo.type, data: S.photo.data },
-        thumb: DEMO ? S.photo.thumb : undefined
-      });
+        thumb: DEMO ? photo.thumb : undefined
+      }, sid ? { stageId: sid } : { file: { name: photo.name, type: photo.type, data: photo.data } }));
+      let r;
+      try {
+        r = await send(stageId);
+      } catch (err) {
+        if (!stageId || err.code !== 'STAGE') throw err;
+        // the early upload was lost (e.g. form left open for hours) → send the photo with the entry
+        photo.stage = null;
+        photo.stageId = null;
+        $('#savingSub').textContent = UPLOADING;
+        r = await send(null);
+      }
+      photo.used = true;
       showSaving(false);
       onSaved(r.row);
     } catch (err) {
@@ -828,7 +865,7 @@
     S.recent = S.recent.slice(0, 30);
     S.period = null; // the period list is fetched again next time (the new payment may belong to it)
     S.vehicles = S.vehicles || [];
-    if (S.vehicles.indexOf(row.vehicle) < 0) S.vehicles.unshift(row.vehicle);
+    if (row.vehicle && S.vehicles.indexOf(row.vehicle) < 0) S.vehicles.unshift(row.vehicle);
     let d = row.driverId ? S.drivers[row.driverId] : { count: 0, total: 0 }; // no ID → nothing to remember
     if (!d) { d = S.drivers[row.driverId] = { id: row.driverId, count: 0, total: 0 }; S.list.unshift(d); }
     d.name = row.name;
