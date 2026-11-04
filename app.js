@@ -52,6 +52,8 @@
   const driveThumb = (id, w) => 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + w;
   const driveView = id => 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view';
   const imgUrl = (r, w) => r.img || (r.fileId ? driveThumb(r.fileId, w) : '');
+  /** Small yellow number plate — nothing when the entry has no vehicle. */
+  const vnoTag = v => (v ? '<span class="vno">' + esc(v) + '</span>' : '');
 
   /* ---------------- state ---------------- */
   const S = {
@@ -766,7 +768,8 @@
   /* ----- submit ----- */
   function validate(v) {
     const errs = {};
-    if (v.vehicle.length < 4) errs.vehicle = 'Enter the vehicle number';
+    // Vehicle No is optional; one that is typed must be complete
+    if (v.vehicle && v.vehicle.length < 4) errs.vehicle = 'Vehicle number looks incomplete (or leave it empty)';
     if (v.name.length < 2) errs.name = 'Enter the driver name';
     // Driver ID and Mobile are optional; a mobile that is filled in must be complete
     if (v.mobile && !/^\d{10}$/.test(v.mobile)) errs.mobile = 'Mobile number must be 10 digits (or leave it empty)';
@@ -823,6 +826,7 @@
     // keep the lists on this device up to date without asking the server again
     S.recent.unshift(row);
     S.recent = S.recent.slice(0, 30);
+    S.period = null; // the period list is fetched again next time (the new payment may belong to it)
     S.vehicles = S.vehicles || [];
     if (S.vehicles.indexOf(row.vehicle) < 0) S.vehicles.unshift(row.vehicle);
     let d = row.driverId ? S.drivers[row.driverId] : { count: 0, total: 0 }; // no ID → nothing to remember
@@ -856,7 +860,7 @@
       '<div class="amount">' + inr(row.amount) + '</div>' +
       '<dl>' +
         '<dt>Driver</dt><dd>' + esc(row.name) + (row.driverId ? ' · ' + esc(row.driverId) : '') + '</dd>' +
-        '<dt>Vehicle</dt><dd><span class="vno">' + esc(row.vehicle) + '</span></dd>' +
+        (row.vehicle ? '<dt>Vehicle</dt><dd><span class="vno">' + esc(row.vehicle) + '</span></dd>' : '') +
         '<dt>Date</dt><dd>' + esc(fmtDate(row.date)) + '</dd>' +
         '<dt>Paid by</dt><dd>' + esc(row.by) + '</dd>' +
       '</dl>' +
@@ -924,13 +928,84 @@
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
     return '<div class="l-date">' + (m ? '<b>' + (+m[3]) + '</b><small>' + MONTHS[+m[2] - 1] + ' ' + m[1].slice(2) + '</small>' : '') + '</div>';
   }
-  const ledger = (title, body) => '<div class="ledger"><div class="ledger-h">' + title + '</div>' + body + '</div>';
+  /** A ruled ledger; xls = show the "Excel" download button in its header. */
+  const ledger = (title, body, xls) => '<div class="ledger"><div class="ledger-h"><span>' + title + '</span>' +
+    (xls ? '<button type="button" class="xls" data-act="xls">' + icon('download') + 'Excel</button>' : '') + '</div>' + body + '</div>';
+
+  /* ----- period (From – To) ----- */
+  const rFrom = $('#rFrom');
+  const rTo = $('#rTo');
+  S.range = { from: '', to: '' };
+  S.period = null; // { key, rows, total } — every payment in the period (when no driver is searched)
+  const rangeSet = () => !!(S.range.from || S.range.to);
+  const inRange = r => (!S.range.from || r.date >= S.range.from) && (!S.range.to || r.date <= S.range.to);
+  function rangeLabel() {
+    const f = S.range.from, t = S.range.to;
+    if (f && t) return f === t ? fmtDate(f) : fmtDate(f) + ' – ' + fmtDate(t);
+    return f ? 'from ' + fmtDate(f) : t ? 'till ' + fmtDate(t) : '';
+  }
+  function onRange() {
+    let f = rFrom.value, t = rTo.value;
+    if (f && t && f > t) { const x = f; f = t; t = x; rFrom.value = f; rTo.value = t; }
+    S.range = { from: f, to: t };
+    $('#rClear').hidden = !rangeSet();
+    if (S.hist) renderHistory(); else renderRecent();
+  }
+  rFrom.addEventListener('change', onRange);
+  rTo.addEventListener('change', onRange);
+  $('#rClear').addEventListener('click', () => { rFrom.value = ''; rTo.value = ''; onRange(); });
+
+  /** Every payment in the chosen period (all drivers). */
+  async function loadPeriod() {
+    const key = S.range.from + '|' + S.range.to;
+    S.period = { key: key, rows: null, total: 0 };
+    histBody.innerHTML = ledger('Payments · ' + esc(rangeLabel()), loadingNote());
+    try {
+      const r = await api('history', { from: S.range.from, to: S.range.to });
+      if (!S.period || S.period.key !== key) return;
+      S.period.rows = r.rows || [];
+      S.period.total = r.total || S.period.rows.length;
+      if (!S.hist) renderPeriod();
+    } catch (e) {
+      if (!S.period || S.period.key !== key) return;
+      S.period = null;
+      if (e.code === 'AUTH') { showPin(() => renderRecent()); return; }
+      if (!S.hist) histBody.innerHTML = ledger('Payments · ' + esc(rangeLabel()), emptyNote('Could not load', esc(e.message) +
+        '<br><br><button class="btn btn-light btn-sm" data-act="period">Try again</button>'));
+    }
+  }
+  function renderPeriod() {
+    const rows = S.period.rows;
+    S.viewRows = rows;
+    S.export = { rows: rows, title: 'All payments · ' + rangeLabel(), file: 'CashPay_' + (S.range.from || 'start') + '_to_' + (S.range.to || today()) };
+    const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const body = !rows.length
+      ? emptyNote('No payments in this period', 'Choose other dates, or clear them to see the latest payments.')
+      : '<div class="ledger-sum"><b>' + rows.length + '</b> ' + (rows.length === 1 ? 'payment' : 'payments') + ' · Total <b>' + inr(total) + '</b>' +
+        (S.period.total > rows.length ? ' · showing the latest ' + rows.length + ' of ' + S.period.total : '') + '</div>' +
+        rows.map(listRow).join('');
+    histBody.innerHTML = ledger('Payments · ' + esc(rangeLabel()), body, rows.length > 0);
+  }
+  /** One payment in the Recent / period lists (tap → that driver's history). */
+  function listRow(r) {
+    return '<div class="lrow click" data-driver="' + esc(r.driverId) + '" data-name="' + esc(r.name) + '">' + marginDate(r.date) +
+      '<div class="l-main"><b>' + esc(r.name) + '</b><small>' + vnoTag(r.vehicle) + esc(r.driverId) + '</small></div>' +
+      '<div class="l-amt">' + inr(r.amount) + '</div>' + icon('chev') + '</div>';
+  }
   const emptyNote = (title, text) => '<div class="empty"><b>' + title + '</b>' + text + '</div>';
   const loadingNote = () => '<div class="loading"><div class="loader" style="width:120px;margin:0"><svg class="truck"><use href="#truck"/></svg></div></div>';
 
   function renderRecent() {
     if (S.hist) return;
+    // dates chosen → every payment in that period instead of the latest ones
+    if (rangeSet()) {
+      const key = S.range.from + '|' + S.range.to;
+      if (!S.period || S.period.key !== key) loadPeriod();
+      else if (S.period.rows) renderPeriod();
+      return;
+    }
     S.viewRows = S.recent;
+    S.export = { rows: S.recent, title: 'Latest payments', file: 'CashPay_latest_' + today() };
     let body;
     if (!S.booted && S.bootError) {
       body = emptyNote('Could not load', esc(S.bootError) + '<br><br><button class="btn btn-light btn-sm" data-act="reload">Try again</button>');
@@ -939,12 +1014,9 @@
     } else if (!S.recent.length) {
       body = emptyNote('No payments yet', 'Every cash payment you submit is written here.');
     } else {
-      body = S.recent.map(r =>
-        '<div class="lrow click" data-driver="' + esc(r.driverId) + '" data-name="' + esc(r.name) + '">' + marginDate(r.date) +
-        '<div class="l-main"><b>' + esc(r.name) + '</b><small><span class="vno">' + esc(r.vehicle) + '</span>' + esc(r.driverId) + '</small></div>' +
-        '<div class="l-amt">' + inr(r.amount) + '</div>' + icon('chev') + '</div>').join('');
+      body = S.recent.map(listRow).join('');
     }
-    histBody.innerHTML = ledger('Recent Payments', body);
+    histBody.innerHTML = ledger('Recent Payments', body, S.recent.length > 0);
   }
 
   /** keepTab = refresh in the background (after a new payment) without switching tabs. */
@@ -970,9 +1042,13 @@
 
   function renderHistory() {
     const H = S.hist;
-    const rows = H.rows || [];
+    if (!H.rows) return; // still loading
+    // the chosen period (if any) applies to the search results too
+    const rows = H.rows.filter(inRange);
     if (!rows.length) {
-      histBody.innerHTML = ledger('Payment History', emptyNote('No payments found', 'Check the driver ID or name and try again.'));
+      histBody.innerHTML = ledger('Payment History', rangeSet() && H.rows.length
+        ? emptyNote('No payments in this period', 'This driver has payments on other dates — change or clear the dates.')
+        : emptyNote('No payments found', 'Check the driver ID or name and try again.'));
       return;
     }
     // one group per driver: by Driver ID, or by name for payments saved without an ID
@@ -1003,6 +1079,8 @@
     S.viewRows = list;
     const d = list[0];
     const total = list.reduce((s, r) => s + r.amount, 0);
+    S.export = { rows: list, title: d.name + (d.driverId ? ' (' + d.driverId + ')' : '') + (rangeSet() ? ' · ' + rangeLabel() : ' · all payments'),
+      file: 'CashPay_' + (d.driverId || d.name) + (rangeSet() ? '_' + (S.range.from || 'start') + '_to_' + (S.range.to || today()) : '') };
     histBody.innerHTML =
       (order.length > 1 ? '<button class="back" data-act="unpick">← All ' + order.length + ' drivers</button>' : '') +
       // driving-licence style card
@@ -1013,7 +1091,8 @@
           (d.driverId ? '<p>ID <b>' + esc(d.driverId) + '</b></p>' : '') +
           (d.mobile ? '<p><a href="tel:+91' + esc(d.mobile) + '">' + icon('phone') + esc(d.mobile) + '</a></p>' : '') +
         '</div></div>' +
-        '<div class="dcard-sum"><div><small>Total paid</small><b>' + inr(total) + '</b></div><div><small>Payments</small><b>' + list.length + '</b></div></div>' +
+        '<div class="dcard-sum"><div><small>Total paid' + (rangeSet() ? ' · ' + esc(rangeLabel()) : '') + '</small><b>' + inr(total) + '</b></div>' +
+          '<div><small>Payments</small><b>' + list.length + '</b></div></div>' +
       '</div>' +
       // red flag when this driver has a pending parchi ("Parchi pending" sheet)
       (function () {
@@ -1024,11 +1103,11 @@
         list.map((r, i) =>
           '<div class="lrow">' + marginDate(r.date) +
           '<div class="l-main"><b>' + inr(r.amount) + '</b>' +
-          '<small><span class="vno">' + esc(r.vehicle) + '</span>' + esc(r.remark || '') + '</small>' +
+          '<small>' + vnoTag(r.vehicle) + esc(r.remark || '') + '</small>' +
           '<small>By ' + esc(r.by || '—') + ' · ' + esc(r.adviceNo) + '</small></div>' +
           thumbBtn(r, i) +
           '<button type="button" class="del" data-del="' + i + '" aria-label="Delete entry ' + esc(r.adviceNo) + '" title="Delete entry">' + icon('trash') + '</button>' +
-          '</div>').join(''));
+          '</div>').join(''), true);
   }
 
   histBody.addEventListener('click', e => {
@@ -1046,10 +1125,71 @@
     }
     const act = e.target.closest('[data-act]');
     if (!act) return;
-    if (act.dataset.act === 'unpick') { S.hist.selected = null; renderHistory(); }
+    if (act.dataset.act === 'xls') exportExcel(act);
+    else if (act.dataset.act === 'period') loadPeriod();
+    else if (act.dataset.act === 'unpick') { S.hist.selected = null; renderHistory(); }
     else if (act.dataset.act === 'retry') runHistory(S.hist.opts);
     else if (act.dataset.act === 'reload') { S.bootError = ''; renderRecent(); loadBoot(); }
   });
+
+  /* ----- Excel download of the list on screen ----- */
+  let xlsxLib = null;
+  /** SheetJS, loaded only when someone downloads. */
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!xlsxLib) {
+      xlsxLib = new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = () => (window.XLSX ? res(window.XLSX) : rej(new Error('Excel library missing')));
+        s.onerror = () => { xlsxLib = null; rej(new Error('Excel library could not load')); };
+        document.head.appendChild(s);
+      });
+    }
+    return xlsxLib;
+  }
+  const ddmmyyyy = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? m[3] + '-' + m[2] + '-' + m[1] : (s || ''); };
+  async function exportExcel(btn) {
+    const x = S.export;
+    if (!x || !x.rows || !x.rows.length) { toast('Nothing to download', true); return; }
+    const head = ['Advice No', 'Payment Date', 'Vehicle No', 'Driver ID', 'Driver Name', 'Mobile', 'Amount (Rs)', 'Remark', 'Uploaded By', 'Entered At', 'Receipt'];
+    const body = x.rows.map(r => [r.adviceNo, ddmmyyyy(r.date), r.vehicle || '', r.driverId || '', r.name || '', r.mobile || '',
+      Number(r.amount) || 0, r.remark || '', r.by || '', r.at || '', r.fileId ? driveView(r.fileId) : '']);
+    const total = x.rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const now = new Date();
+    const aoa = [['Daman Group — Cash Pay Advices'], [x.title], ['Downloaded ' + fmtDate(today()) + ' ' + now.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })], [], head]
+      .concat(body, [[], ['', '', '', '', 'TOTAL · ' + x.rows.length + (x.rows.length === 1 ? ' payment' : ' payments'), '', total]]);
+    const base = String(x.file || 'CashPay').replace(/[^\w\-]+/g, '_');
+    const label = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+    try {
+      const XLSX = await loadXlsx();
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [11, 12, 13, 10, 24, 12, 12, 44, 18, 17, 46].map(w => ({ wch: w }));
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Payments');
+      XLSX.writeFile(wb, base + '.xlsx');
+      toast('Excel downloaded · ' + x.rows.length + (x.rows.length === 1 ? ' payment' : ' payments'));
+    } catch (e) {
+      // no internet for the library → a CSV file, which Excel opens as well
+      const cell = v => {
+        let s = String(v == null ? '' : v);
+        if (typeof v === 'string' && /^[=+\-@]/.test(s)) s = "'" + s;
+        return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      const csv = '﻿' + aoa.map(r => r.map(cell).join(',')).join('\r\n');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      a.download = base + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast('Downloaded as CSV (opens in Excel)');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = label; }
+    }
+  }
 
   /* ----- delete an entry (the server keeps a copy in the "Deleted" tab) ----- */
   let delRow = null;
@@ -1095,10 +1235,13 @@
   function removeLocal(r) {
     const same = x => x.adviceNo === r.adviceNo;
     const hist = S.hist;
+    const period = S.period;
     const ri = S.recent.findIndex(same);
     const hi = hist && hist.rows ? hist.rows.findIndex(same) : -1;
+    const pi = period && period.rows ? period.rows.findIndex(same) : -1;
     if (ri >= 0) S.recent.splice(ri, 1);
     if (hi >= 0) hist.rows.splice(hi, 1);
+    if (pi >= 0) { period.rows.splice(pi, 1); period.total--; }
     const d = r.driverId && S.drivers[r.driverId];
     if (d) { d.count = Math.max(0, (d.count || 0) - 1); d.total = Math.max(0, (d.total || 0) - r.amount); }
     saveBoot();
@@ -1106,6 +1249,7 @@
     return function undo() {
       if (ri >= 0 && !S.recent.some(same)) S.recent.splice(ri, 0, r);
       if (hi >= 0 && S.hist === hist && !hist.rows.some(same)) hist.rows.splice(hi, 0, r);
+      if (pi >= 0 && S.period === period && !period.rows.some(same)) { period.rows.splice(pi, 0, r); period.total++; }
       if (d) { d.count = (d.count || 0) + 1; d.total = (d.total || 0) + r.amount; }
       saveBoot();
       redraw();
@@ -1138,6 +1282,8 @@
     $$('[data-appname]').forEach(el => { el.textContent = CFG.APP_NAME || 'Cash Pay Advices'; });
     $('#demoBanner').hidden = !DEMO;
     $('#vDate').textContent = fmtDate(today());
+    rFrom.value = rTo.value = '';
+    rFrom.max = rTo.max = today();
     // every refresh starts with an empty form (also when the browser tries to refill it)
     form.reset();
     setView(location.hash === '#history' ? 'history' : 'pay');

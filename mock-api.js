@@ -54,10 +54,11 @@
 
   function history(db, b) {
     const id = String(b.driverId || '').toUpperCase().replace(/\s+/g, '');
+    const q = String(b.q || '').trim().toLowerCase();
     let out;
     if (id) out = db.rows.filter(r => r.driverId === id);
+    else if (!q && (b.from || b.to)) out = db.rows.slice(); // every payment in the period
     else {
-      const q = String(b.q || '').trim().toLowerCase();
       if (q.length < 2) throw new Error('Type at least 2 letters to search');
       const qk = q.replace(/[^a-z0-9]/g, '');
       const qd = q.replace(/\D/g, '');
@@ -68,6 +69,8 @@
           (qk.length >= 4 && r.vehicle.toLowerCase().indexOf(qk) >= 0) || r.adviceNo.toLowerCase() === q;
       });
     }
+    if (b.from) out = out.filter(r => r.date >= b.from);
+    if (b.to) out = out.filter(r => r.date <= b.to);
     out = out.slice().sort((a, c) => (c.date + c.at).localeCompare(a.date + a.at));
     return { rows: out, total: out.length };
   }

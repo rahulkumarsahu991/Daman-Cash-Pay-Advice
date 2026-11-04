@@ -1,0 +1,3 @@
+# Google Apps Script backend: holds the access PIN and the delete password - never publish it
+Code.gs
+*.gs
