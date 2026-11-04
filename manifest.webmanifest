@@ -1,0 +1,14 @@
+{
+  "name": "Daman Group — Cash Pay Advices",
+  "short_name": "Cash Pay",
+  "description": "Record cash paid to drivers with the receipt photo, and check any driver's payment history",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1b1e4f",
+  "theme_color": "#1b1e4f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

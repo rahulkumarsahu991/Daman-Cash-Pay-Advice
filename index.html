@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cash Pay Advices · Daman Group</title>
+  <meta name="description" content="Daman Group — record cash paid to drivers with the receipt photo and check a driver's payment history.">
+  <meta name="theme-color" content="#14163a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Cash Pay">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://script.googleusercontent.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=Caveat:wght@600&display=swap" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="styles.css?v=17">
+</head>
+<body data-view="pay">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
+    <symbol id="i-rupee" viewBox="0 0 24 24"><path d="M6 3h12M6 8h12M6 13l8.5 8M6 13h3M9 13c6.7 0 6.7-10 0-10"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="currentColor"/><path d="M4 22v-7"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M9 7h7M9 11h5"/></symbol>
+    <!-- side view of a Daman truck -->
+    <symbol id="truck" viewBox="0 0 96 40">
+      <rect x="2" y="5" width="58" height="24" rx="2" fill="#f4efe1"/>
+      <rect x="2" y="25" width="58" height="4" fill="#f28a1c"/>
+      <text x="31" y="21" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle" fill="#1b1e4f" letter-spacing="1">DAMAN</text>
+      <path d="M63 11h14l10 10v10H63z" fill="#f28a1c"/>
+      <path d="M66 14h9l7 7H66z" fill="#cfe9ff"/>
+      <rect x="60" y="29" width="30" height="3" fill="#0d0f26"/>
+      <rect x="86" y="24" width="4" height="3" rx="1" fill="#fff6b0"/>
+      <g fill="#0d0f26"><circle cx="15" cy="33" r="5.5"/><circle cx="31" cy="33" r="5.5"/><circle cx="78" cy="33" r="5.5"/></g>
+      <g fill="#9aa0b8"><circle cx="15" cy="33" r="2"/><circle cx="31" cy="33" r="2"/><circle cx="78" cy="33" r="2"/></g>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="top-in">
+    <img src="logo.webp" alt="" width="46" height="46">
+    <div class="brand">
+      <b data-company>Daman Group</b>
+      <small>Transport &amp; Logistics</small>
+    </div>
+    <span class="top-tag" data-appname>Cash Pay Advices</span>
+  </div>
+</header>
+
+<main class="road">
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-view="pay" aria-selected="true" aria-controls="payPanel"><svg class="i"><use href="#i-rupee"/></svg>New Payment</button>
+    <button class="tab" role="tab" data-view="history" aria-selected="false" aria-controls="histPanel"><svg class="i"><use href="#i-book"/></svg>Payment History</button>
+  </div>
+
+  <p class="demo" id="demoBanner" hidden><span>Demo mode · entries are saved only in this browser</span></p>
+
+  <!-- ============ NEW PAYMENT : the voucher ============ -->
+  <section id="payPanel" role="tabpanel">
+    <form class="voucher" id="payForm" novalidate autocomplete="off">
+      <div class="v-head">
+        <div>
+          <h1 class="v-title">Cash Pay Advice</h1>
+          <p class="v-sub">Daman Group · Transport &amp; Logistics</p>
+        </div>
+        <div class="v-meta">
+          <span>No.</span><b>Auto</b>
+          <span>Date</span><b id="vDate"></b>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="f_vehicle">Vehicle Number <span class="req">*</span></label>
+        <div class="ac">
+          <div class="plate">
+            <span class="plate-ind" aria-hidden="true"><i></i>IND</span>
+            <input id="f_vehicle" type="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="14" placeholder="CG08AR7911" enterkeyhint="next">
+          </div>
+        </div>
+        <p class="err" id="e_vehicle"></p>
+        <p class="vnote" id="vehNote" hidden></p>
+        <div class="pending" id="pendBox" role="alert" hidden></div>
+        <div class="trips" id="tripBox" hidden></div>
+      </div>
+
+      <div class="pair">
+        <div class="field">
+          <label class="lbl" for="f_driverId">Driver ID</label>
+          <input class="line upper" id="f_driverId" type="text" autocapitalize="characters" spellcheck="false" maxlength="24" placeholder="e.g. DRV101" enterkeyhint="next">
+          <p class="err" id="e_driverId"></p>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f_name">Driver Name <span class="req">*</span></label>
+          <input class="line" id="f_name" type="text" autocapitalize="words" spellcheck="false" maxlength="80" placeholder="Full name" enterkeyhint="next">
+          <p class="err" id="e_name"></p>
+        </div>
+      </div>
+
+      <div class="pair">
+        <div class="field">
+          <label class="lbl" for="f_mobile">Mobile Number</label>
+          <input class="line" id="f_mobile" type="tel" inputmode="numeric" maxlength="14" placeholder="10-digit number" enterkeyhint="next">
+          <p class="err" id="e_mobile"></p>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f_amount">Amount <span class="req">*</span></label>
+          <div class="amt"><span>₹</span><input id="f_amount" type="text" inputmode="decimal" maxlength="12" placeholder="0" enterkeyhint="next"></div>
+          <p class="err" id="e_amount"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="f_remark">Remark</label>
+        <textarea class="ruled" id="f_remark" rows="3" maxlength="500" placeholder="Write a remark (optional)"></textarea>
+      </div>
+
+      <div class="field" id="photoField">
+        <label class="lbl">Receipt Photo <span class="req">*</span></label>
+        <input type="file" id="f_photo" accept="image/*,application/pdf" hidden>
+        <button type="button" class="attach" id="uploadBox">
+          <span class="tape l"></span><span class="tape r"></span>
+          <svg class="i"><use href="#i-camera"/></svg>
+          <b>Attach Receipt Photo</b>
+          <small>Tap to take a photo or choose from gallery</small>
+        </button>
+        <div class="pinned" id="photoPreview" hidden></div>
+        <p class="err" id="e_photo"></p>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="f_by">Uploaded By (your name) <span class="req">*</span></label>
+        <input class="line sign" id="f_by" type="text" autocapitalize="words" spellcheck="false" maxlength="60" placeholder="Your name" enterkeyhint="done">
+        <p class="err" id="e_by"></p>
+      </div>
+
+      <button class="press" id="submitBtn" type="submit">Submit Payment</button>
+    </form>
+  </section>
+
+  <!-- ============ HISTORY : driver ledger ============ -->
+  <section id="histPanel" role="tabpanel">
+    <form class="sign-board" id="searchForm" autocomplete="off" role="search">
+      <label class="sb-t" for="q">Find Driver</label>
+      <div class="sb-row">
+        <div class="ac">
+          <input class="sb-in" id="q" type="search" placeholder="Driver ID or name" enterkeyhint="search" autocapitalize="off" spellcheck="false">
+          <button type="button" class="in-x" id="qClear" aria-label="Clear" hidden><svg class="i"><use href="#i-x"/></svg></button>
+        </div>
+        <button class="sb-go" type="submit" aria-label="Search"><svg class="i"><use href="#i-search"/></svg></button>
+      </div>
+    </form>
+    <div id="histBody" aria-live="polite"></div>
+  </section>
+
+  <p class="road-end">Daman Group · Transport &amp; Logistics</p>
+</main>
+
+<!-- ============ popups ============ -->
+<div class="ov" id="savingOv" hidden>
+  <div class="box center">
+    <div class="loader"><svg class="truck"><use href="#truck"/></svg></div>
+    <b>Saving payment…</b><small>Uploading receipt to Google Drive</small>
+  </div>
+</div>
+
+<div class="ov" id="okOv" hidden>
+  <div class="box slip" role="dialog" aria-modal="true" id="okBody"></div>
+</div>
+
+<div class="ov" id="errOv" hidden>
+  <div class="box center" role="alertdialog" aria-modal="true">
+    <div class="big-ic"><svg class="i"><use href="#i-alert"/></svg></div>
+    <b>Not saved</b>
+    <p id="errMsg"></p>
+    <div class="two">
+      <button class="btn btn-light" type="button" data-close>Close</button>
+      <button class="btn btn-amber" type="button" id="retryBtn">Try again</button>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="delOv" hidden>
+  <form class="box center" id="delForm" role="alertdialog" aria-modal="true" autocomplete="off">
+    <div class="big-ic"><svg class="i"><use href="#i-trash"/></svg></div>
+    <b>Delete this entry?</b>
+    <p id="delInfo"></p>
+    <input class="box-in" id="delBy" type="text" autocapitalize="words" maxlength="60" placeholder="Your name" aria-label="Your name">
+    <input class="box-in" id="delPw" type="password" placeholder="Delete password" aria-label="Delete password" hidden>
+    <p class="pin-err" id="delErr"></p>
+    <div class="two">
+      <button class="btn btn-light" type="button" data-close>Cancel</button>
+      <button class="btn btn-red" type="submit" id="delBtn">Delete</button>
+    </div>
+    <small>A copy is kept in the “Deleted” tab of the Google Sheet.</small>
+  </form>
+</div>
+
+<div class="ov lb" id="lightbox" hidden>
+  <div class="lb-top">
+    <span id="lbTitle"></span>
+    <a id="lbOpen" href="#" target="_blank" rel="noopener">Open</a>
+    <button class="lb-x" type="button" data-close aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="lb-img" id="lbWrap"></div>
+</div>
+
+<div class="pin" id="pinScreen" hidden>
+  <form class="box center" id="pinForm" autocomplete="off">
+    <img src="logo.webp" alt="" width="56" height="56">
+    <b>Daman Group</b>
+    <small>Enter the access PIN</small>
+    <input class="pin-in" id="pinIn" type="password" autocapitalize="off" spellcheck="false" placeholder="PIN" aria-label="Access PIN" maxlength="40">
+    <p class="pin-err" id="pinErr"></p>
+    <button class="press" id="pinBtn" type="submit">Open</button>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js?v=2"></script>
+<script>
+  if (!String((window.CPA_CONFIG || {}).APPS_SCRIPT_URL || '').trim()) document.write('<script src="mock-api.js?v=3"><\/script>');
+</script>
+<script src="app.js?v=18"></script>
+</body>
+</html>
