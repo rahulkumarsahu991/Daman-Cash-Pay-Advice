@@ -253,6 +253,7 @@
       try {
         const r = await api('bootstrap');
         applyBoot(r);
+        if (r.att && !r.att.stale) S.attFetched = Date.now(); // the server's copy is less than 10 minutes old
         saveBoot();
         // the server had no fresh attendance / pending list → fetch them in the background (the page is usable already)
         const old = x => x === null || (x && x.stale);
@@ -268,7 +269,7 @@
   function loadAttendance() {
     attPromise = api('attendance').then(r => {
       if (r.pending) applyPending(r.pending);
-      if (r.att) applyAtt(r.att);
+      if (r.att) { applyAtt(r.att); S.attFetched = Date.now(); }
       saveBoot();
       renderPending();
       if (r.att) afterAttendance();
@@ -450,6 +451,18 @@
     if (!F.driverId.dataset.auto) return;
     ['driverId', 'name', 'mobile'].forEach(k => { if (F[k].dataset.auto) { F[k].value = ''; delete F[k].dataset.auto; } });
   }
+  /**
+   * Today's driver of a vehicle: { v: full number, d: driver } or null.
+   * Exact number first; when the user has left the box, also the end of a number
+   * ("BJ3811" → "CG08BJ3811") — but only when exactly one vehicle in today's list ends like that.
+   */
+  function attFor(v, final) {
+    const att = S.att || {};
+    if (att[v]) return { v: v, d: att[v] };
+    if (!final || v.length < 4) return null;
+    const ends = Object.keys(att).filter(k => k.length > v.length && k.slice(-v.length) === v);
+    return ends.length === 1 ? { v: ends[0], d: att[ends[0]] } : null;
+  }
   /** final = the user has left the box (show "not found"); otherwise stay quiet while typing. */
   async function lookupVehicle(final) {
     const v = normVehicle(F.vehicle.value);
@@ -463,9 +476,31 @@
       await pending();
       if (normVehicle(F.vehicle.value) !== v) return;
     }
+    // page left open since yesterday → get today's list first
+    if (!DEMO && final && S.attDate !== today() && Date.now() - (S.attFetched || 0) > 180000) {
+      setVehNote('wait', 'Loading today’s attendance…');
+      S.attFetched = Date.now();
+      await loadAttendance();
+      if (normVehicle(F.vehicle.value) !== v) return;
+    }
     let d = null;
     if (S.attDate === today()) {
-      d = S.att[v] || null;
+      let hit = attFor(v, final);
+      // not in the list on this device → the sheet may have been filled after it was loaded:
+      // fetch the latest attendance once (at most every 3 minutes) and look again
+      if (!hit && final && !DEMO && Date.now() - (S.attFetched || 0) > 180000) {
+        setVehNote('wait', 'Checking latest attendance…');
+        S.attFetched = Date.now();
+        await loadAttendance();
+        if (normVehicle(F.vehicle.value) !== v) return; // the number changed meanwhile (or was completed)
+        hit = attFor(v, final);
+      }
+      if (hit && hit.v !== v) {
+        // "BJ3811" → the full number from the attendance sheet, "CG08BJ3811"
+        F.vehicle.value = hit.v;
+        return lookupVehicle(final);
+      }
+      d = hit ? hit.d : null;
     } else if (!DEMO && final) {
       setVehNote('wait', 'Checking today’s attendance…');
       try {
