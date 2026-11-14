@@ -198,7 +198,14 @@
     }
     S.attDate = p.date || '';
     S.attNote = p.error || '';
+    if (p.v && p.v.length) S.fleet = p.v; // every vehicle number ("Calling Sheet" column C)
     mergeAttDrivers();
+  }
+  /** Vehicle numbers for suggestions: the Calling Sheet list; until that has arrived, today's attendance + paid before. */
+  function vehicleList() {
+    if (S.fleet && S.fleet.length) return S.fleet;
+    const seen = {};
+    return Object.keys(S.att || {}).concat(S.vehicles || []).filter(v => v && !seen[v] && (seen[v] = 1));
   }
   /** Attendance drivers also fill in name + mobile when a Driver ID is typed. */
   function mergeAttDrivers() {
@@ -210,7 +217,7 @@
   }
   function afterAttendance() {
     // a real vehicle number as the example in the box
-    const sample = Object.keys(S.att || {})[0] || (S.vehicles || [])[0];
+    const sample = vehicleList()[0];
     if (sample) F.vehicle.placeholder = sample;
     // a vehicle typed before the list arrived gets its driver now
     if (F.vehicle.value && !F.driverId.value) lookupVehicle(true);
@@ -452,16 +459,19 @@
     ['driverId', 'name', 'mobile'].forEach(k => { if (F[k].dataset.auto) { F[k].value = ''; delete F[k].dataset.auto; } });
   }
   /**
-   * Today's driver of a vehicle: { v: full number, d: driver } or null.
+   * A typed vehicle → { v: full number, d: today's driver or null }, or null.
    * Exact number first; when the user has left the box, also the end of a number
-   * ("BJ3811" → "CG08BJ3811") — but only when exactly one vehicle in today's list ends like that.
+   * ("BJ3811" → "CG08BJ3811") — but only when exactly one known vehicle ends like that
+   * (vehicle list from the Calling Sheet + today's attendance).
    */
   function attFor(v, final) {
     const att = S.att || {};
     if (att[v]) return { v: v, d: att[v] };
     if (!final || v.length < 4) return null;
-    const ends = Object.keys(att).filter(k => k.length > v.length && k.slice(-v.length) === v);
-    return ends.length === 1 ? { v: ends[0], d: att[ends[0]] } : null;
+    const seen = {};
+    const ends = vehicleList().concat(Object.keys(att))
+      .filter(k => !seen[k] && (seen[k] = 1) && k.length > v.length && k.slice(-v.length) === v);
+    return ends.length === 1 ? { v: ends[0], d: att[ends[0]] || null } : null;
   }
   /** final = the user has left the box (show "not found"); otherwise stay quiet while typing. */
   async function lookupVehicle(final) {
@@ -598,13 +608,11 @@
   });
   F.vehicle.addEventListener('change', () => { clearTimeout(vehTimer); lookupVehicle(true); });
 
-  // suggestions: "AW" → every vehicle with AW, "AW32" → CG08AW3211 (today's attendance first)
+  // suggestions: "AW" → every vehicle with AW, "AW32" → CG08AW3211 (list = Calling Sheet column C)
   function findVehicles(text) {
     const q = normVehicle(text);
     if (q.length < 2) return [];
-    const seen = {};
-    const all = Object.keys(S.att || {}).concat(S.vehicles || []).filter(v => !seen[v] && (seen[v] = 1));
-    return all.filter(v => v.indexOf(q) >= 0 && v !== q)
+    return vehicleList().filter(v => v.indexOf(q) >= 0 && v !== q)
       .sort((a, b) => (a.indexOf(q) === 0 ? 0 : 1) - (b.indexOf(q) === 0 ? 0 : 1) || a.localeCompare(b))
       .slice(0, 8);
   }
@@ -612,7 +620,7 @@
     (v, typed) => {
       const d = (S.att || {})[v];
       return '<span class="vno">' + mark(v, normVehicle(typed)) + '</span>' +
-        '<small>' + (d ? esc(d.name || d.id) + ' · ' + esc(d.id) : 'paid before') + '</small>' +
+        '<small>' + (d ? esc(d.name || d.id) + ' · ' + esc(d.id) : (S.fleet ? 'no driver in today’s attendance' : 'paid before')) + '</small>' +
         (pendingFor(v).length ? '<span class="flag">' + icon('flag') + 'Parchi pending</span>' : '');
     },
     async v => {
