@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=Caveat:wght@600&display=swap" media="print" onload="this.media='all'">
-  <link rel="stylesheet" href="styles.css?v=18">
+  <link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body data-view="pay">
 
@@ -122,6 +122,20 @@
           <div class="amt"><span>₹</span><input id="f_amount" type="text" inputmode="decimal" maxlength="12" placeholder="0" enterkeyhint="next"></div>
           <p class="err" id="e_amount"></p>
         </div>
+      </div>
+
+      <!-- payment date: today by default; pick an earlier day for a back-dated payment -->
+      <div class="field" id="dateField">
+        <label class="lbl" for="f_date">Payment Date <span class="req">*</span></label>
+        <div class="pdate">
+          <input class="line" id="f_date" type="date" min="2020-01-01">
+          <div class="pdate-q">
+            <button type="button" data-days="0">Today</button>
+            <button type="button" data-days="1">Yesterday</button>
+          </div>
+        </div>
+        <p class="bdate" id="backNote" hidden></p>
+        <p class="err" id="e_date"></p>
       </div>
 
       <div class="field">
@@ -242,6 +256,6 @@
 <script>
   if (!String((window.CPA_CONFIG || {}).APPS_SCRIPT_URL || '').trim()) document.write('<script src="mock-api.js?v=4"><\/script>');
 </script>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

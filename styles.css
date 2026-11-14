@@ -102,6 +102,23 @@ body[data-view="pay"] #histPanel, body[data-view="history"] #payPanel { display:
 .line::placeholder, .ruled::placeholder, .amt input::placeholder { color: #b9ae92; font: 400 16px var(--font); letter-spacing: 0; text-transform: none; }
 .line:focus { border-bottom: 2px solid var(--amber); background: linear-gradient(transparent 60%, rgba(242, 138, 28, .1)); }
 .upper { text-transform: uppercase; letter-spacing: .5px; }
+
+/* payment date + quick Today / Yesterday */
+.pdate { display: flex; align-items: center; gap: 10px; }
+.pdate .line { flex: 1; min-width: 0; cursor: pointer; }
+.pdate-q { display: flex; gap: 6px; flex: none; }
+.pdate-q button {
+  height: 34px; padding: 0 11px; border: 1.5px solid var(--ink); border-radius: 17px; background: transparent; color: var(--ink);
+  font: 700 13px var(--display); letter-spacing: 1px; text-transform: uppercase; cursor: pointer;
+}
+.pdate-q button.on { background: var(--ink); color: var(--plate); }
+.bdate {
+  display: inline-block; margin: 8px 0 0; padding: 3px 10px; border: 1.5px dashed var(--red); border-radius: 4px;
+  background: #fdecea; color: var(--red); font: 700 13.5px var(--display); letter-spacing: .8px; text-transform: uppercase;
+}
+.bdate[hidden] { display: none; }
+.v-meta b.back { padding: 0 4px; background: #fdecea; outline: 1.5px dashed var(--red); }
+.slip .bk { margin-left: 6px; padding: 1px 6px; border-radius: 3px; background: #fdecea; color: var(--red); font: 700 11.5px var(--display); letter-spacing: .8px; text-transform: uppercase; }
 .sign { font: 600 30px var(--hand); height: 50px; border-bottom-style: solid; border-bottom-color: var(--ink); }
 
 /* yellow commercial number plate */

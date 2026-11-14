@@ -373,6 +373,7 @@
   const form = $('#payForm');
   const F = {};
   FIELDS.forEach(k => { F[k] = $('#f_' + k); });
+  F.date = $('#f_date');
 
   const normVehicle = v => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 14);
   const normId = v => v.toUpperCase().replace(/\s+/g, '').slice(0, 24);
@@ -405,7 +406,7 @@
       name: F.name.value.trim().replace(/\s+/g, ' '),
       mobile: F.mobile.value.replace(/\D/g, ''),
       amount: Math.round((parseFloat(F.amount.value) || 0) * 100) / 100,
-      date: today(),
+      date: F.date.value || today(),
       remark: F.remark.value.trim(),
       by: F.by.value.trim().replace(/\s+/g, ' ')
     };
@@ -609,6 +610,38 @@
     if (k !== 'remark') setErr(k, '');
   }));
 
+  /* ----- payment date: today by default, an earlier day = back date ----- */
+  function setPayDate(d) {
+    F.date.max = today();
+    F.date.value = d || today();
+    showPayDate();
+  }
+  function showPayDate() {
+    const d = F.date.value, t = today();
+    const back = /^\d{4}-\d{2}-\d{2}$/.test(d) && d < t;
+    const days = back ? Math.round((Date.parse(t) - Date.parse(d)) / 86400000) : 0;
+    $('#vDate').textContent = fmtDate(d || t);
+    $('#vDate').classList.toggle('back', back);
+    const note = $('#backNote');
+    note.hidden = !back;
+    note.textContent = back ? '⏪ Back date · ' + fmtDate(d) + ' · ' + (days === 1 ? 'yesterday' : days + ' days ago') : '';
+    $$('.pdate-q [data-days]').forEach(b => b.classList.toggle('on', !!d && Number(b.dataset.days) === days && (back || d === t)));
+    setErr('date', '');
+  }
+  F.date.addEventListener('input', showPayDate);
+  F.date.addEventListener('change', showPayDate);
+  // a new day may have started while the page was open
+  F.date.addEventListener('focus', () => { F.date.max = today(); });
+  // the whole box opens the calendar (not only the small icon)
+  F.date.addEventListener('click', () => { try { if (F.date.showPicker) F.date.showPicker(); } catch (e) { /* not allowed here */ } });
+  $('#dateField').addEventListener('click', e => {
+    const b = e.target.closest('[data-days]');
+    if (!b) return;
+    const x = new Date();
+    x.setDate(x.getDate() - Number(b.dataset.days));
+    setPayDate(ymd(x));
+  });
+
   // Enter = next field (phones show "Next"), not submit half a form
   form.addEventListener('keydown', e => {
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || e.isComposing) return;
@@ -794,10 +827,13 @@
     // Driver ID and Mobile are optional; a mobile that is filled in must be complete
     if (v.mobile && !/^\d{10}$/.test(v.mobile)) errs.mobile = 'Mobile number must be 10 digits (or leave it empty)';
     if (!(v.amount > 0)) errs.amount = 'Enter the amount';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date) || v.date < '2020-01-01') errs.date = 'Choose the payment date';
+    else if (v.date > today()) errs.date = 'Payment date cannot be in the future';
     if (!S.photo) errs.photo = 'Upload the receipt photo';
     if (!v.by) errs.by = 'Enter your name';
-    ['vehicle', 'driverId', 'name', 'mobile', 'amount', 'photo', 'by'].forEach(k => setErr(k, errs[k] || ''));
-    const first = ['vehicle', 'driverId', 'name', 'mobile', 'amount', 'photo', 'by'].find(k => errs[k]);
+    const keys = ['vehicle', 'driverId', 'name', 'mobile', 'amount', 'date', 'photo', 'by'];
+    keys.forEach(k => setErr(k, errs[k] || ''));
+    const first = keys.find(k => errs[k]);
     if (!first) return true;
     const el = first === 'photo' ? uploadBox : F[first];
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -880,6 +916,7 @@
     const by = F.by.value;
     form.reset();
     F.by.value = by;
+    setPayDate(); // the next entry starts on today again (a back date is never carried over by mistake)
     delete F.driverId.dataset.auto;
     delete F.name.dataset.auto;
     delete F.mobile.dataset.auto;
@@ -898,7 +935,7 @@
       '<dl>' +
         '<dt>Driver</dt><dd>' + esc(row.name) + (row.driverId ? ' · ' + esc(row.driverId) : '') + '</dd>' +
         (row.vehicle ? '<dt>Vehicle</dt><dd><span class="vno">' + esc(row.vehicle) + '</span></dd>' : '') +
-        '<dt>Date</dt><dd>' + esc(fmtDate(row.date)) + '</dd>' +
+        '<dt>Date</dt><dd>' + esc(fmtDate(row.date)) + (row.date && row.date < today() ? '<span class="bk">Back date</span>' : '') + '</dd>' +
         '<dt>Paid by</dt><dd>' + esc(row.by) + '</dd>' +
       '</dl>' +
       // where the receipt photo went in Google Drive (and why, if not the chosen folder)
@@ -1318,11 +1355,11 @@
     $$('[data-company]').forEach(el => { el.textContent = CFG.COMPANY || 'Daman Group'; });
     $$('[data-appname]').forEach(el => { el.textContent = CFG.APP_NAME || 'Cash Pay Advices'; });
     $('#demoBanner').hidden = !DEMO;
-    $('#vDate').textContent = fmtDate(today());
     rFrom.value = rTo.value = '';
     rFrom.max = rTo.max = today();
     // every refresh starts with an empty form (also when the browser tries to refill it)
     form.reset();
+    setPayDate();
     setView(location.hash === '#history' ? 'history' : 'pay');
 
     const cached = store.get(K.boot);
