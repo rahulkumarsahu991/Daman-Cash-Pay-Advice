@@ -464,8 +464,8 @@
    * ("BJ3811" → "CG08BJ3811") — but only when exactly one known vehicle ends like that
    * (vehicle list from the Calling Sheet + today's attendance).
    */
-  function attFor(v, final) {
-    const att = S.att || {};
+  function attFor(v, final, map) {
+    const att = map || S.att || {};
     if (att[v]) return { v: v, d: att[v] };
     if (!final || v.length < 4) return null;
     const seen = {};
@@ -473,11 +473,41 @@
       .filter(k => !seen[k] && (seen[k] = 1) && k.length > v.length && k.slice(-v.length) === v);
     return ends.length === 1 ? { v: ends[0], d: att[ends[0]] || null } : null;
   }
+  /* ----- attendance of an earlier day (back-dated payment) ----- */
+  const attDays = {};   // 'yyyy-mm-dd' → { att: { VEHICLE: driver }, note, at }
+  const attDayReq = {}; // requests on their way
+  /** The day whose attendance gives the driver: the chosen payment date (today when none / not valid). */
+  function payDay() {
+    const d = F.date.value, t = today();
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= '2020-01-01' && d < t ? d : t;
+  }
+  function loadAttDay(day, force) {
+    const have = attDays[day];
+    if (have && !force && !(have.failed && Date.now() - have.at > 30000)) return Promise.resolve(have);
+    if (attDayReq[day]) return attDayReq[day];
+    attDayReq[day] = api('attendanceDay', { date: day }).then(r => {
+      const p = r.att || {};
+      const drivers = (p.d || []).map(x => ({ id: x[0], name: x[1], mobile: x[2] }));
+      const att = {};
+      Object.keys(p.m || {}).forEach(v => { att[v] = drivers[p.m[v]]; });
+      // these drivers also fill in name + mobile when their Driver ID is typed
+      drivers.forEach(m => { if (!S.drivers[m.id]) S.drivers[m.id] = { id: m.id, name: m.name, mobile: m.mobile, count: 0, total: 0 }; });
+      return (attDays[day] = { att: att, note: p.error || '', at: Date.now() });
+    }).catch(e => {
+      if (e.code === 'AUTH') showPin();
+      // kept for 30 s only (then asked again), so typing does not send a request per key
+      return (attDays[day] = { att: {}, note: e.message || 'error', at: Date.now(), failed: true });
+    }).finally(() => { delete attDayReq[day]; });
+    return attDayReq[day];
+  }
+
   /** final = the user has left the box (show "not found"); otherwise stay quiet while typing. */
   async function lookupVehicle(final) {
     const v = normVehicle(F.vehicle.value);
     renderPending(); // instant: the list is already on this device
     if (v.length < 4) { setVehNote(''); clearAutoDriver(); renderPending(); loadTrips(''); return; }
+    const day = payDay();
+    if (day !== today()) return lookupVehicleOn(day, v, final);
     // today's list is still on its way → wait for it instead of asking the server per keystroke
     // (the attendance request only starts once the start-up data is in, so check them one after the other)
     for (const pending of [() => bootPromise, () => attPromise]) {
@@ -524,6 +554,7 @@
         return;
       }
     }
+    if (payDay() !== day) return; // the payment date was changed meanwhile → that lookup fills the driver
     if (d) {
       if (fillDriver(d)) setVehNote('ok', '✓ Today’s driver (Attendance): <b>' + esc(d.name || d.driverId || d.id) + '</b>');
       else setVehNote('', '');
@@ -536,6 +567,44 @@
     }
     renderPending(); // the driver may have changed with the vehicle
     // a complete number (known today, or the user left the box) → show its trips
+    if (d || final) loadTrips(v);
+  }
+
+  /** Back-dated payment: the driver who had the vehicle on that day ("Attendance <month>", that date's column). */
+  async function lookupVehicleOn(day, v, final) {
+    const still = () => normVehicle(F.vehicle.value) === v && payDay() === day;
+    let entry = DEMO ? { att: {}, note: '', at: Date.now() } : attDays[day] || null;
+    if (entry && entry.failed && Date.now() - entry.at > 30000) entry = null;
+    if (!entry) {
+      if (final) setVehNote('wait', 'Loading attendance of ' + esc(fmtDate(day)) + '…');
+      entry = await loadAttDay(day);
+      if (!still()) return; // the vehicle or the date changed meanwhile
+    }
+    let hit = entry ? attFor(v, final, entry.att) : null;
+    // not found in a copy that is a few minutes old → the sheet may have been corrected: ask once more
+    if (!hit && final && entry && !DEMO && Date.now() - entry.at > 180000) {
+      setVehNote('wait', 'Checking attendance of ' + esc(fmtDate(day)) + '…');
+      entry = await loadAttDay(day, true);
+      if (!still()) return;
+      hit = attFor(v, final, entry.att);
+    }
+    if (hit && hit.v !== v) {
+      F.vehicle.value = hit.v; // "BJ3811" → "CG08BJ3811"
+      return lookupVehicle(final);
+    }
+    const d = hit ? hit.d : null;
+    const on = esc(fmtDate(day));
+    if (d) {
+      if (fillDriver(d)) setVehNote('ok', '✓ Driver on ' + on + ' (Attendance): <b>' + esc(d.name || d.id) + '</b>');
+      else setVehNote('', '');
+    } else {
+      clearAutoDriver();
+      if (final) setVehNote('none', !entry || entry.note
+        ? 'Could not read the attendance of ' + on + ' — please fill the driver details.'
+        : 'No driver for this vehicle on ' + on + ' in attendance — please fill the driver details.');
+      else setVehNote('');
+    }
+    renderPending();
     if (d || final) loadTrips(v);
   }
 
@@ -618,9 +687,12 @@
   }
   suggestBox(F.vehicle, findVehicles,
     (v, typed) => {
-      const d = (S.att || {})[v];
+      // the driver of the chosen payment date (today, or the back date once its attendance is loaded)
+      const day = payDay(), isToday = day === today();
+      const d = (isToday ? S.att || {} : (attDays[day] || {}).att || {})[v];
+      const none = isToday ? 'no driver in today’s attendance' : (attDays[day] ? 'no driver on ' + fmtDate(day) : '');
       return '<span class="vno">' + mark(v, normVehicle(typed)) + '</span>' +
-        '<small>' + (d ? esc(d.name || d.id) + ' · ' + esc(d.id) : (S.fleet ? 'no driver in today’s attendance' : 'paid before')) + '</small>' +
+        '<small>' + (d ? esc(d.name || d.id) + ' · ' + esc(d.id) : (S.fleet ? esc(none) : 'paid before')) + '</small>' +
         (pendingFor(v).length ? '<span class="flag">' + icon('flag') + 'Parchi pending</span>' : '');
     },
     async v => {
@@ -658,6 +730,18 @@
     F.date.max = today();
     F.date.value = d || today();
     showPayDate();
+    payDateChanged();
+  }
+  /** Another payment date → the driver of the vehicle on that day (from that day's attendance). */
+  let payDayShown = '';
+  let payDayTimer = null;
+  function payDateChanged() {
+    const day = payDay();
+    if (day === payDayShown) return;
+    payDayShown = day;
+    if (!DEMO && day !== today()) loadAttDay(day); // start loading at once (before a vehicle is even typed)
+    clearTimeout(payDayTimer);
+    payDayTimer = setTimeout(() => { if (normVehicle(F.vehicle.value).length >= 4) lookupVehicle(true); }, 250);
   }
   function showPayDate() {
     const d = F.date.value, t = today();
@@ -672,7 +756,7 @@
     setErr('date', '');
   }
   F.date.addEventListener('input', showPayDate);
-  F.date.addEventListener('change', showPayDate);
+  F.date.addEventListener('change', () => { showPayDate(); payDateChanged(); });
   // a new day may have started while the page was open
   F.date.addEventListener('focus', () => { F.date.max = today(); });
   // the whole box opens the calendar (not only the small icon)
